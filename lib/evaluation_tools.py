@@ -1,6 +1,6 @@
 import yfinance as yf
 import pandas as pd
-from datetime import datetime as dt
+import datetime as dt
 from dateutil.parser import parse
 
 
@@ -20,24 +20,26 @@ def _is_date(string, fuzzy=False):
 
 
 def build_figure_df(tickers, start_date=[]):
-    if not start_date:
-        dates_list = []
-        for ticker_symbol in tickers:
-            ticker_data = yf.Ticker(ticker_symbol)
-            yf_df = pd.DataFrame(ticker_data.history(period='1D', start='1970-1-1', end=dt.now()))
-            dates_list.append(yf_df.index)
-        start_date = min(set(dates_list[0]).intersection(*dates_list))
-        print('No start date selected. Using', str(start_date))
-
-    if not _is_date(str(start_date)):
-        raise ValueError('date format invalid. Try yyyy-mm-dd')
-
-    full_df = pd.DataFrame()
+    tmp_df = pd.DataFrame()
+    final_df = pd.DataFrame()
+    dates_list = []
     for ticker_symbol in tickers:
         ticker_data = yf.Ticker(ticker_symbol)
-        yf_df = pd.DataFrame(ticker_data.history(period='1day', start=start_date, end=dt.now()))
-        yf_df['Close_pct'] = yf_df['Close'] / yf_df['Close'][0]
+        yf_df = pd.DataFrame(ticker_data.history(period='1D', start='1970-1-1', end=dt.datetime.now())).reset_index()
+        dates_list.append(yf_df['Date'])
         yf_df['ticker'] = ticker_symbol
-        full_df = pd.concat([full_df, yf_df], axis=0)
+        tmp_df = pd.concat([tmp_df, yf_df], axis=0)
+    if not start_date:
+        start_date = min(set(dates_list[0]).intersection(*dates_list))
+    tmp_df = tmp_df[tmp_df['Date'] >= pd.to_datetime(start_date)]
 
-    return full_df.reset_index()
+    for ticker_symbol in tickers:
+        yf_df = tmp_df[tmp_df['ticker'] == ticker_symbol].copy()
+        if (dt.datetime.now() - pd.to_datetime(start_date)) > dt.timedelta(days=600):
+            print('Data resampled to end of week')
+            frequency = 'weekly'
+            yf_df = yf_df.resample('M', on='Date').last()
+        yf_df['Close_pct'] = yf_df['Close'] / yf_df['Close'][0]
+        final_df = pd.concat([final_df, yf_df])
+        
+    return final_df
