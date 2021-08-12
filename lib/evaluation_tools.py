@@ -19,6 +19,12 @@ def _is_date(string, fuzzy=False):
         return False
 
 
+def clean_string(string):
+    cleaned = [symbols.replace(' ', '').upper() for symbols in string.split(',')]
+
+    return cleaned
+
+
 def build_figure_df(tickers, start_date=[]):
     tmp_df = pd.DataFrame()
     final_df = pd.DataFrame()
@@ -31,15 +37,33 @@ def build_figure_df(tickers, start_date=[]):
         tmp_df = pd.concat([tmp_df, yf_df], axis=0)
     if not start_date:
         start_date = min(set(dates_list[0]).intersection(*dates_list))
+    else:
+        filtered_list = [lists[lists>start_date] for lists in dates_list]
+        start_date = min(set(filtered_list[0]).intersection(*filtered_list))
     tmp_df = tmp_df[tmp_df['Date'] >= pd.to_datetime(start_date)]
 
     for ticker_symbol in tickers:
-        yf_df = tmp_df[tmp_df['ticker'] == ticker_symbol].copy()
-        if (dt.datetime.now() - pd.to_datetime(start_date)) > dt.timedelta(days=600):
-            print('Data resampled to end of week')
-            frequency = 'weekly'
-            yf_df = yf_df.resample('M', on='Date').last()
-        yf_df['Close_pct'] = yf_df['Close'] / yf_df['Close'][0]
+        yf_df = tmp_df[tmp_df['ticker'] == ticker_symbol].copy().sort_values('Date').reset_index(drop=True)
+        yf_df['% ROI'] = ((yf_df['Close'] / yf_df['Close'][0])-1)*100
+        yf_df['Percent change'] = yf_df['Close'].pct_change()
         final_df = pd.concat([final_df, yf_df])
-        
+
     return final_df
+
+
+def downsample(df, points_threshold=1000):
+    for frequency in ['W', 'M']:
+        final_df = pd.DataFrame()
+        if df.shape[0] > points_threshold:
+            print('Too many points. Downsampling daily data to', frequency, 'data.')
+            for ticker_symbol in df['ticker'].unique():
+                yf_df = df[df['ticker'] == ticker_symbol].copy()
+                yf_df = yf_df.resample(frequency, on='Date').last()
+                final_df = pd.concat([final_df, yf_df])
+            if final_df.shape[0] <= points_threshold:
+                return final_df, frequency
+        else:
+            print('Points under threshold. Keeping daily frequency')
+            frequency = 'D'
+            return df, frequency
+
