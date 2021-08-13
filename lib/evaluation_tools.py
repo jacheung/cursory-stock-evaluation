@@ -45,7 +45,7 @@ def build_figure_df(tickers, start_date=[]):
     for ticker_symbol in tickers:
         yf_df = tmp_df[tmp_df['ticker'] == ticker_symbol].copy().sort_values('Date').reset_index(drop=True)
         yf_df['% ROI'] = ((yf_df['Close'] / yf_df['Close'][0])-1)*100
-        yf_df['Percent change'] = yf_df['Close'].pct_change()
+        yf_df['Percent change'] = yf_df['Close'].pct_change()*100
         final_df = pd.concat([final_df, yf_df])
 
     return final_df
