@@ -1,7 +1,7 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import plotly.express as px
 from lib import evaluation_tools as tools
 import pandas as pd
@@ -11,28 +11,47 @@ app = dash.Dash(__name__)
 app.layout = html.Div([
     html.H1("Welcome!"),
     html.H3("Input stock ticker symbols in the text box to compare % ROI. Separate by commas."),
-    dcc.Input(
-        id='stock-tickers',
-        type='text',
-        value='VOO, VOOG, VV'
-    ),
-    dcc.Input(
-        id='date',
-        type='text',
-        value='2017-01-01'
-    ),
+
+    html.Div(dcc.Input(id='stock-tickers', type='text', value='VOO, VV')),
+    html.Div(['VOO, VV'], id='ticker-div', style={'display': 'none'}),
+    html.Button('Submit tickers', id='submit-ticker-button'),
+
+    html.Div(dcc.Input(id='date', type='text', value='2021-01-01')),
+    html.Div(['2021-01-01'], id='date-div', style={'display': 'none'}),
+    html.Button('Submit dates', id='submit-date-button'),
+
+    # html.Div(dcc.Input(
+    #     id='date',
+    #     type='text',
+    #     value='2021-01-01'
+    # )),
     dcc.Graph(id='stock-ROI-scatter'),
     dcc.Graph(id='stock-daily-histogram'),
     dcc.Store(id='intermediate-df')
 ])
 
 
+@app.callback(Output('ticker-div', 'children'),
+              [Input('submit-ticker-button', 'n_clicks')],
+              state=[State(component_id='stock-tickers', component_property='value')])
+def update_ticker_div(n_clicks, input_value):
+    return input_value
+
+
+@app.callback(Output('date-div', 'children'),
+              [Input('submit-date-button', 'n_clicks')],
+              state=[State(component_id='date', component_property='value')])
+def update_date_div(n_clicks, input_value):
+    return input_value
+
+
 @app.callback(
     Output('intermediate-df', 'data'),
-    Input('stock-tickers', 'value'),
-    Input('date', 'value')
+    Input('date-div', 'children'),
+    Input('ticker-div', 'children')
+
 )
-def build_dataframe_json(stock_tickers, date):
+def build_dataframe_json(date, stock_tickers):
     stock_tickers = tools.clean_string(stock_tickers)
     df = tools.build_figure_df(stock_tickers, start_date=date)
     json_df = df.reset_index(drop=True).to_json()
