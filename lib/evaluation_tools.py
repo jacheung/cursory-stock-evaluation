@@ -38,7 +38,7 @@ def build_figure_df(tickers, start_date=[]):
     if not start_date:
         start_date = min(set(dates_list[0]).intersection(*dates_list))
     else:
-        filtered_list = [lists[lists>start_date] for lists in dates_list]
+        filtered_list = [lists[lists > start_date] for lists in dates_list]
         start_date = min(set(filtered_list[0]).intersection(*filtered_list))
     tmp_df = tmp_df[tmp_df['Date'] >= pd.to_datetime(start_date)]
 
@@ -66,4 +66,34 @@ def downsample(df, points_threshold=1000):
             print('Points under threshold. Keeping daily frequency')
             frequency = 'D'
             return df, frequency
+
+
+def human_format(num):
+    num = float('{:.3g}'.format(num))
+    magnitude = 0
+    while abs(num) >= 1000:
+        magnitude += 1
+        num /= 1000.0
+    return '{}{}'.format('{:f}'.format(num).rstrip('0').rstrip('.'), ['', 'K', 'M', 'B', 'T'][magnitude])
+
+
+def overview_table(tickers):
+    compiled_df = pd.DataFrame()
+    for ticker in tickers:
+        data = yf.Ticker(ticker)
+        df = data.major_holders.rename(columns={0: ticker, 1: 'Feature'}).set_index('Feature').transpose()
+        # grab numeric features into human readable formats
+        numeric_features = ['fullTimeEmployees', 'marketCap', 'trailingPE']
+        for feature in numeric_features:
+            if feature in data.info.keys() and data.info[feature] is not None:
+                df[feature] = human_format(data.info[feature])
+
+        # YOY revenue growth
+        if not data.earnings.empty:
+            YOY = (data.earnings['Revenue'].pct_change() * 100).dropna().round(1)
+            YOY_strings = [str(k) + '-' + str(k + 1) + ' revenue growth' for k in data.earnings['Revenue'].index][:-1]
+            df[YOY_strings] = YOY.values
+        # compile final dataframe
+        compiled_df = pd.concat([compiled_df, df])
+    return compiled_df.transpose().sort_index()
 
