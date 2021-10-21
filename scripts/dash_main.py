@@ -1,4 +1,5 @@
 import dash
+import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
@@ -12,21 +13,16 @@ app.layout = html.Div([
     html.H1("Welcome!"),
     html.H3("Input stock ticker symbols in the text box to compare % ROI. Separate by commas."),
 
-    html.Div(dcc.Input(id='stock-tickers', type='text', value='VOO, VV')),
-    html.Div(['VOO, VV'], id='ticker-div', style={'display': 'none'}),
+    html.Div(dcc.Input(id='stock-tickers', type='text', value='AMZN, MSFT, GOOGL')),
+    html.Div(['AMZN, MSFT, GOOGL'], id='ticker-div', style={'display': 'none'}),
     html.Button('Submit tickers', id='submit-ticker-button'),
 
     html.Div(dcc.Input(id='date', type='text', value='2021-01-01')),
     html.Div(['2021-01-01'], id='date-div', style={'display': 'none'}),
     html.Button('Submit dates', id='submit-date-button'),
 
-    # html.Div(dcc.Input(
-    #     id='date',
-    #     type='text',
-    #     value='2021-01-01'
-    # )),
     dcc.Graph(id='stock-ROI-scatter'),
-    dcc.Graph(id='stock-daily-histogram'),
+    dash_table.DataTable(id='ticker_table'),
     dcc.Store(id='intermediate-df')
 ])
 
@@ -49,7 +45,6 @@ def update_date_div(n_clicks, input_value):
     Output('intermediate-df', 'data'),
     Input('date-div', 'children'),
     Input('ticker-div', 'children')
-
 )
 def build_dataframe_json(date, stock_tickers):
     stock_tickers = tools.clean_string(stock_tickers)
@@ -65,23 +60,23 @@ def build_dataframe_json(date, stock_tickers):
 def update_scatter(json_df):
     df = pd.read_json(json_df)
     scatter_df, frequency = tools.downsample(df)
-    fig = px.scatter(scatter_df, x="Date", y="% ROI", color="ticker",
-                     title='Stock ' + frequency + ' % ROI')
+    fig = px.scatter(scatter_df, x="Date", y="% ROI", color="ticker")
     fig.update_traces(mode='lines+markers')
     fig.update_layout(hovermode="x unified")
     return fig
 
 
 @app.callback(
-    Output('stock-daily-histogram', 'figure'),
-    Input('intermediate-df', 'data')
+    [Output(component_id='ticker_table', component_property='data'),
+     Output(component_id='ticker_table', component_property='columns')],
+    Input('ticker-div', 'children')
 )
-def update_histogram(json_df):
-    df = pd.read_json(json_df)
-    hist_bins = df['Percent change'].quantile([.01, .99]).round(2).values
-    fig = px.histogram(df, x='Percent change', color='ticker', nbins=151, range_x=hist_bins.tolist(),
-                       histnorm='probability', marginal="rug")
-    return fig
+def display_ticker_info(tickers):
+    stock_tickers = tools.clean_string(tickers)
+    df = tools.overview_table(stock_tickers).reset_index()
+    columns = [{'name': col, 'id': col} for col in df.columns]
+    data = df.to_dict(orient='records')
+    return data, columns
 
 
 if __name__ == '__main__':
